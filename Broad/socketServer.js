@@ -1,5 +1,17 @@
 const jwt = require("jsonwebtoken");
 let users = [];
+let io;
+
+const setIo = (ioInstance) => {
+  io = ioInstance;
+};
+
+const emitToUser = (userId, event, data) => {
+  const recipient = users.find((u) => u.userId == userId);
+  if (recipient && io) {
+    io.to(recipient.socketId).emit(event, data);
+  }
+};
 
 const authSocket = (socket, next) => {
   let token = socket.handshake.auth.token;
@@ -35,4 +47,4 @@ const socketServer = (socket) => {
   });
 };
 
-module.exports = { socketServer, authSocket };
+module.exports = { socketServer, authSocket, setIo, emitToUser };

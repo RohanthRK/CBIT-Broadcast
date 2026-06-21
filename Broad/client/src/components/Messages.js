@@ -1,17 +1,12 @@
 import {
-  Button,
   Divider,
-  FormControl,
   IconButton,
-  InputAdornment,
-  InputLabel,
-  OutlinedInput,
   Stack,
   Typography,
 } from "@mui/material";
 import { Box } from "@mui/system";
 import React, { useEffect, useRef, useState } from "react";
-import { AiFillBackward, AiFillCaretLeft, AiFillMessage } from "react-icons/ai";
+import { AiFillCaretLeft, AiFillMessage } from "react-icons/ai";
 import { Link } from "react-router-dom";
 import { getMessages, sendMessage } from "../api/messages";
 import { isLoggedIn } from "../helpers/authHelper";
@@ -54,12 +49,6 @@ const Messages = (props) => {
 
   const fetchMessages = async () => {
     if (conversation) {
-      if (conversation.new) {
-        setLoading(false);
-        setMessages(conversation.messages);
-        return;
-      }
-
       setLoading(true);
 
       const data = await getMessages(user, conversation._id);
@@ -68,6 +57,29 @@ const Messages = (props) => {
 
       if (data && !data.error) {
         setMessages(data);
+
+        // Mark conversation as read locally and resolve conversation ID if it was a user ID
+        const updatedConversations = props.conversations.map((c) => {
+          if (c._id === conversation._id) {
+            let actualId = c._id;
+            let isNew = c.new;
+            if (data.length > 0) {
+              actualId = data[0].conversation;
+              isNew = false;
+            }
+            return {
+              ...c,
+              _id: actualId,
+              new: isNew,
+              unreadCount: 0,
+            };
+          }
+          return c;
+        });
+        props.setConversations(updatedConversations);
+
+        // Notify Navbar
+        window.dispatchEvent(new Event("messages-read"));
       }
 
       setLoading(false);
@@ -75,8 +87,17 @@ const Messages = (props) => {
   };
 
   useEffect(() => {
+    setMessages(null);
     fetchMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.conservant]);
+
+  useEffect(() => {
+    if (props.conservant && !messages && props.conversations && props.conversations.length > 0) {
+      fetchMessages();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.conversations]);
 
   useEffect(() => {
     if (messages) {
@@ -85,7 +106,9 @@ const Messages = (props) => {
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current.scrollIntoView();
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView();
+    }
   };
 
   const handleSendMessage = async (content) => {
@@ -106,7 +129,26 @@ const Messages = (props) => {
 
     setMessages(newMessages);
 
-    await sendMessage(user, newMessage, conversation.recipient._id);
+    const res = await sendMessage(user, newMessage, conversation.recipient._id);
+
+    if (res && res.conversationId) {
+      // Update conversation in the state with the actual ID
+      const updatedConversations = newConversations.map((c) => {
+        if (c._id === conversation._id) {
+          return {
+            ...c,
+            _id: res.conversationId,
+            new: false,
+          };
+        }
+        return c;
+      });
+      props.setConversations(updatedConversations);
+      
+      // Update the local conversation object ID so that subsequent operations in this closure use the real ID
+      conversation._id = res.conversationId;
+      conversation.new = false;
+    }
 
     socket.emit(
       "send-message",
@@ -116,7 +158,7 @@ const Messages = (props) => {
     );
   };
 
-  const handleReceiveMessage = (senderId, username, content) => {
+  const handleReceiveMessage = async (senderId, username, content) => {
     const newMessage = { direction: "to", content };
 
     const conversation = props.getConversation(
@@ -124,20 +166,34 @@ const Messages = (props) => {
       senderId
     );
 
+    const isActive = conservantRef.current && conservantRef.current._id === senderId;
+
     console.log(username + " " + content);
 
     if (conversation) {
       let newMessages = [newMessage];
-      if (messagesRef.current) {
+      if (messagesRef.current && isActive) {
         newMessages = [...newMessages, ...messagesRef.current];
       }
 
-      setMessages(newMessages);
+      if (isActive) {
+        setMessages(newMessages);
+      }
 
       if (conversation.new) {
         conversation.messages = newMessages;
       }
       conversation.lastMessageAt = Date.now();
+
+      // Update unread count
+      if (isActive) {
+        conversation.unreadCount = 0;
+        await getMessages(user, conversation._id);
+        window.dispatchEvent(new Event("messages-read"));
+      } else {
+        conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+        window.dispatchEvent(new Event("messages-read"));
+      }
 
       let newConversations = conversationsRef.current.filter(
         (conversationCompare) => conversation._id !== conversationCompare._id
@@ -153,15 +209,24 @@ const Messages = (props) => {
         new: true,
         messages: [newMessage],
         lastMessageAt: Date.now(),
+        unreadCount: isActive ? 0 : 1,
       };
+      if (isActive) {
+        setMessages([newMessage]);
+      } else {
+        window.dispatchEvent(new Event("messages-read"));
+      }
       props.setConversations([newConversation, ...conversationsRef.current]);
     }
 
-    scrollToBottom();
+    if (isActive) {
+      scrollToBottom();
+    }
   };
 
   useEffect(() => {
     socket.on("receive-message", handleReceiveMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return props.conservant ? (
@@ -211,7 +276,6 @@ const Messages = (props) => {
             </Box>
           </Box>
           <SendMessage onSendMessage={handleSendMessage} />
-          {scrollToBottom()}
         </>
       ) : (
         <Stack sx={{ height: "100%" }} justifyContent="center">

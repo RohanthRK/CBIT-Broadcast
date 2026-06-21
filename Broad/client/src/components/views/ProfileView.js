@@ -1,7 +1,7 @@
-import { Card, Container, Stack, Tab, Tabs } from "@mui/material";
+import { Card, Container, Stack } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getUser, updateUser } from "../../api/users";
+import { getUser, updateUser, followUser, unfollowUser } from "../../api/users";
 import { isLoggedIn } from "../../helpers/authHelper";
 import CommentBrowser from "../CommentBrowser";
 
@@ -27,9 +27,12 @@ const ProfileView = () => {
   const params = useParams();
   const navigate = useNavigate();
 
+  const isOwnProfile =
+    user && profile && user.username === profile.user.username;
+
   const fetchUser = async () => {
     setLoading(true);
-    const data = await getUser(params);
+    const data = await getUser(params, user && user.token);
     setLoading(false);
     if (data.error) {
       setError(data.error);
@@ -57,9 +60,31 @@ const ProfileView = () => {
     navigate("/messenger", { state: { user: profile.user } });
   };
 
+  const handleFollow = async () => {
+    if (!profile) return;
+    const wasFollowing = profile.isFollowing;
+    setProfile({
+      ...profile,
+      isFollowing: !wasFollowing,
+      followerCount: profile.followerCount + (wasFollowing ? -1 : 1),
+    });
+    if (wasFollowing) {
+      await unfollowUser(profile.user._id, user);
+    } else {
+      await followUser(profile.user._id, user);
+    }
+  };
+
+  const handleProfileUpdate = (updatedFields) => {
+    setProfile({
+      ...profile,
+      user: { ...profile.user, ...updatedFields },
+    });
+  };
+
   useEffect(() => {
     fetchUser();
-  }, []);
+  }, [params.id]);
 
   const validate = (content) => {
     let error = "";
@@ -89,6 +114,9 @@ const ProfileView = () => {
         />
       ),
       comments: <CommentBrowser profileUser={profile.user} />,
+      saved: isOwnProfile ? (
+        <PostBrowser contentType="saved" key="saved" />
+      ) : null,
     };
   }
 
@@ -105,12 +133,17 @@ const ProfileView = () => {
               handleSubmit={handleSubmit}
               handleEditing={handleEditing}
               handleMessage={handleMessage}
+              handleFollow={handleFollow}
               validate={validate}
             />
             <Stack spacing={2}>
               {profile ? (
                 <>
-                  <ProfileTabs tab={tab} setTab={setTab} />
+                  <ProfileTabs
+                    tab={tab}
+                    setTab={setTab}
+                    isOwnProfile={isOwnProfile}
+                  />
 
                   {tabs[tab]}
                 </>
@@ -129,6 +162,8 @@ const ProfileView = () => {
               handleSubmit={handleSubmit}
               handleEditing={handleEditing}
               handleMessage={handleMessage}
+              handleFollow={handleFollow}
+              handleProfileUpdate={handleProfileUpdate}
               validate={validate}
             />
 

@@ -1,16 +1,51 @@
-import { Button, Card, Link, Stack, Typography } from "@mui/material";
-import { alignProperty } from "@mui/material/styles/cssUtils";
+import {
+  Button,
+  Card,
+  MenuItem,
+  Select,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { Box } from "@mui/system";
 import React, { useEffect, useState } from "react";
-import { MdSettingsInputAntenna } from "react-icons/md";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { getPosts, getUserLikedPosts } from "../api/posts";
+import { getBookmarkedPosts } from "../api/bookmarks";
 import { isLoggedIn } from "../helpers/authHelper";
 import CreatePost from "./CreatePost";
 import Loading from "./Loading";
 import PostCard from "./PostCard";
 import SortBySelect from "./SortBySelect";
 import HorizontalStack from "./util/HorizontalStack";
+
+const POST_CATEGORIES = [
+  "All",
+  "General",
+  "Academics",
+  "Events",
+  "Placements",
+  "Sports",
+  "Exam Cell",
+  "Clubs",
+];
+
+const DEPARTMENTS = [
+  "CSE",
+  "IT",
+  "ECE",
+  "EEE",
+  "MECH",
+  "CIVIL",
+  "CHEM",
+  "BIOTECH",
+  "AIDS",
+  "AIML",
+  "CSD",
+  "MCA",
+  "MBA"
+];
+
+
 
 const PostBrowser = (props) => {
   const [posts, setPosts] = useState([]);
@@ -19,6 +54,8 @@ const PostBrowser = (props) => {
   const [end, setEnd] = useState(false);
   const [sortBy, setSortBy] = useState("-createdAt");
   const [count, setCount] = useState(0);
+  const [category, setCategory] = useState("All");
+  const [feedScope, setFeedScope] = useState("All");
   const user = isLoggedIn();
 
   const [search] = useSearchParams();
@@ -42,6 +79,8 @@ const PostBrowser = (props) => {
     if (props.contentType === "posts") {
       if (props.profileUser) query.author = props.profileUser.username;
       if (searchExists) query.search = search.get("search");
+      if (category && category !== "All") query.category = category;
+      if (feedScope && feedScope !== "All") query.feedScope = feedScope;
 
       data = await getPosts(user && user.token, query);
     } else if (props.contentType === "liked") {
@@ -50,6 +89,13 @@ const PostBrowser = (props) => {
         user && user.token,
         query
       );
+    } else if (props.contentType === "saved") {
+      data = await getBookmarkedPosts(user && user.token, query);
+    }
+
+    if (!data || !data.data) {
+      setLoading(false);
+      return;
     }
 
     if (data.data.length < 10) {
@@ -65,7 +111,7 @@ const PostBrowser = (props) => {
 
   useEffect(() => {
     fetchPosts();
-  }, [sortBy, effect]);
+  }, [sortBy, category, feedScope, effect]);
 
   useEffect(() => {
     setPosts([]);
@@ -86,6 +132,13 @@ const PostBrowser = (props) => {
     setPage(0);
     setEnd(false);
     setSortBy(newSortBy);
+  };
+
+  const handleCategory = (e) => {
+    setPosts([]);
+    setPage(0);
+    setEnd(false);
+    setCategory(e.target.value);
   };
 
   const removePost = (removedPost) => {
@@ -110,6 +163,10 @@ const PostBrowser = (props) => {
       "-createdAt": "Latest",
       createdAt: "Earliest",
     },
+    saved: {
+      "-createdAt": "Latest",
+      createdAt: "Earliest",
+    },
   };
 
   const sorts = contentTypeSorts[props.contentType];
@@ -120,11 +177,50 @@ const PostBrowser = (props) => {
         <Card>
           <HorizontalStack justifyContent="space-between">
             {props.createPost && <CreatePost />}
-            <SortBySelect
-              onSortBy={handleSortBy}
-              sortBy={sortBy}
-              sorts={sorts}
-            />
+            <HorizontalStack spacing={2}>
+              {props.contentType === "posts" && (
+                <HorizontalStack spacing={1}>
+                  <Select
+                    size="small"
+                    value={feedScope}
+                    onChange={(e) => {
+                      setPosts([]);
+                      setPage(0);
+                      setEnd(false);
+                      setFeedScope(e.target.value);
+                    }}
+                    sx={{ minWidth: 150 }}
+                  >
+                    <MenuItem value="All">All Departments</MenuItem>
+                    {DEPARTMENTS.map((dept) => (
+                      <MenuItem key={dept} value={dept}>
+                        {dept}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <Typography color="text.secondary" variant="subtitle2">
+                    Category:
+                  </Typography>
+                  <Select
+                    size="small"
+                    value={category}
+                    onChange={handleCategory}
+                    sx={{ minWidth: 130 }}
+                  >
+                    {POST_CATEGORIES.map((cat) => (
+                      <MenuItem key={cat} value={cat}>
+                        {cat}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </HorizontalStack>
+              )}
+              <SortBySelect
+                onSortBy={handleSortBy}
+                sortBy={sortBy}
+                sorts={sorts}
+              />
+            </HorizontalStack>
           </HorizontalStack>
         </Card>
 

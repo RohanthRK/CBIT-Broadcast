@@ -5,6 +5,7 @@ import {
   ListItemButton,
   ListItemText,
   MenuItem,
+  Badge,
 } from "@mui/material";
 import { Box } from "@mui/system";
 import React from "react";
@@ -35,7 +36,11 @@ const UserMessengerEntry = (props) => {
           <UserAvatar height={45} width={45} username={username} />
         </ListItemAvatar>
         <ListItemText
-          primary={username}
+          primary={
+            <Badge badgeContent={props.conversation.unreadCount} color="error" sx={{ '& .MuiBadge-badge': { right: -15, top: 10 } }}>
+              {username}
+            </Badge>
+          }
           secondary={moment(props.conversation.lastMessageAt).fromNow()}
         />
       </MenuItem>

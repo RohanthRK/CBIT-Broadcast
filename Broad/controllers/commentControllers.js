@@ -2,6 +2,8 @@ const Comment = require("../models/Comment");
 const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const paginate = require("../util/paginate");
+const Notification = require("../models/Notification");
+const { emitToUser } = require("../socketServer");
 
 const createComment = async (req, res) => {
   try {
@@ -25,6 +27,17 @@ const createComment = async (req, res) => {
     await post.save();
 
     await Comment.populate(comment, { path: "commenter", select: "-password" });
+
+    if (post.poster.toString() !== userId) {
+      const notification = await Notification.create({
+        recipient: post.poster,
+        sender: userId,
+        type: "comment",
+        postId: post._id,
+      });
+      await notification.populate("sender", "username");
+      emitToUser(post.poster.toString(), "receive-notification", notification);
+    }
 
     return res.json(comment);
   } catch (err) {

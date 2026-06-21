@@ -51,14 +51,19 @@ const getPost = async (postId, token) => {
 
 const createPost = async (post, user) => {
   try {
+    const isFormData = post instanceof FormData;
+    const headers = {
+      "x-access-token": user.token,
+    };
+    if (!isFormData) {
+      headers["Accept"] = "application/json";
+      headers["Content-Type"] = "application/json";
+    }
+
     const res = await fetch(BASE_URL + "api/posts", {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "x-access-token": user.token,
-      },
-      body: JSON.stringify(post),
+      headers,
+      body: isFormData ? post : JSON.stringify(post),
     });
     return await res.json();
   } catch (err) {
@@ -195,6 +200,22 @@ const unlikePost = async (postId, user) => {
     console.log(err);
   }
 };
+const votePoll = async (postId, optionIds, user) => {
+  try {
+    const res = await fetch(BASE_URL + "api/posts/vote/" + postId, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-access-token": user.token,
+      },
+      body: JSON.stringify({ optionIds, userId: user._id }),
+    });
+    return res.json();
+  } catch (err) {
+    console.log(err);
+  }
+};
 
 export {
   getPost,
@@ -210,4 +231,5 @@ export {
   updateComment,
   likePost,
   unlikePost,
+  votePoll,
 };

@@ -26,6 +26,11 @@ import ExploreView from "./components/views/ExploreView";
 import PrivateRoute from "./components/PrivateRoute";
 import SearchView from "./components/views/SearchView";
 import MessengerView from "./components/views/MessengerView";
+import DirectoryView from "./components/views/DirectoryView";
+import AdminDashboard from "./components/AdminDashboard";
+import LostFoundView from "./components/views/LostFoundView";
+import ResourcesView from "./components/views/ResourcesView";
+import EventsView from "./components/views/EventsView";
 import { initiateSocketConnection, socket } from "./helpers/socketHelper";
 import { useEffect } from "react";
 import { BASE_URL } from "./config";
@@ -59,6 +64,46 @@ function App() {
           />
           <Route path="/search" element={<SearchView />} />
           <Route path="/users/:id" element={<ProfileView />} />
+          <Route
+            path="/directory"
+            element={
+              <PrivateRoute>
+                <DirectoryView />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/lost-found"
+            element={
+              <PrivateRoute>
+                <LostFoundView />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/resources"
+            element={
+              <PrivateRoute>
+                <ResourcesView />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/events"
+            element={
+              <PrivateRoute>
+                <EventsView />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <PrivateRoute>
+                <AdminDashboard />
+              </PrivateRoute>
+            }
+          />
           <Route path="/login" element={<LoginView />} />
           <Route path="/signup" element={<SignupView />} />
         </Routes>

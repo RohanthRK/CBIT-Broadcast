@@ -12,6 +12,7 @@ const ProfileTabs = (props) => {
         <Tab label="Posts" value="posts" />
         <Tab label="Liked" value="liked" />
         <Tab label="Comments" value="comments" />
+        {props.isOwnProfile && <Tab label="Saved" value="saved" />}
       </Tabs>
     </Card>
   );

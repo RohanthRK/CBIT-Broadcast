@@ -43,4 +43,17 @@ const sendMessage = async (user, message, recipientId) => {
   }
 };
 
-export { getConversations, getMessages, sendMessage };
+const getUnreadMessagesCount = async (user) => {
+  try {
+    const res = await fetch(BASE_URL + "api/messages/unread", {
+      headers: {
+        "x-access-token": user.token,
+      },
+    });
+    return await res.json();
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+export { getConversations, getMessages, sendMessage, getUnreadMessagesCount };

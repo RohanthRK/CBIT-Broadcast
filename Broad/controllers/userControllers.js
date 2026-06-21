@@ -4,6 +4,8 @@ const PostLike = require("../models/PostLike");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const Follow = require("../models/Follow");
+const Notification = require("../models/Notification");
+const { emitToUser } = require("../socketServer");
 const { default: mongoose } = require("mongoose");
 
 const getUserDict = (token, user) => {
@@ -24,10 +26,14 @@ const buildToken = (user) => {
 
 const register = async (req, res) => {
   try {
-    const { username, email, password, roll_no, ph_no, department} = req.body;
+    const { username, email, password, roll_no, ph_no, department, college, collegeEmail } = req.body;
 
-    if (!(username && email && password && roll_no && ph_no && department)) {
-      throw new Error("All input required");
+    if (!(username && email && password && roll_no && ph_no && department && college)) {
+      throw new Error("All inputs are required");
+    }
+
+    if (!collegeEmail && !req.file) {
+      throw new Error("Please enter college email or upload ID card proof");
     }
 
     const normalizedEmail = email.toLowerCase();
@@ -39,6 +45,11 @@ const register = async (req, res) => {
       throw new Error("Email and username must be unique");
     }
 
+    let idProofUrl = "";
+    if (req.file) {
+      idProofUrl = "/public/uploads/" + req.file.filename;
+    }
+
     const user = await User.create({
       username,
       email: normalizedEmail,
@@ -46,11 +57,16 @@ const register = async (req, res) => {
       roll_no,
       ph_no,
       department,
+      college,
+      collegeEmail: collegeEmail || "",
+      idProofUrl,
+      verificationStatus: "pending",
     });
 
-    const token = jwt.sign(buildToken(user), process.env.TOKEN_KEY);
-
-    return res.json(getUserDict(token, user));
+    return res.json({
+      success: true,
+      message: "Registration successful. Please wait for admin approval.",
+    });
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -76,6 +92,14 @@ const login = async (req, res) => {
       throw new Error("Email or password incorrect");
     }
 
+    if (user.verificationStatus === "pending") {
+      throw new Error("Your account is pending verification by the admin. Please try again later.");
+    }
+
+    if (user.verificationStatus === "rejected") {
+      throw new Error("Your registration has been rejected. Please contact support.");
+    }
+
     const token = jwt.sign(buildToken(user), process.env.TOKEN_KEY);
 
     return res.json(getUserDict(token, user));
@@ -90,13 +114,23 @@ const follow = async (req, res) => {
     const { userId } = req.body;
     const followingId = req.params.id;
 
-    const existingFollow = await Follow.find({ userId, followingId });
+    const existingFollow = await Follow.findOne({ userId, followingId });
 
     if (existingFollow) {
       throw new Error("Already following this user");
     }
 
     const follow = await Follow.create({ userId, followingId });
+
+    if (userId !== followingId) {
+      const notification = await Notification.create({
+        recipient: followingId,
+        sender: userId,
+        type: "follow",
+      });
+      await notification.populate("sender", "username");
+      emitToUser(followingId, "receive-notification", notification);
+    }
 
     return res.status(200).json({ data: follow });
   } catch (err) {
@@ -106,7 +140,7 @@ const follow = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    const { userId, biography } = req.body;
+    const { userId, biography, skills, socialLinks, year, projects } = req.body;
 
     const user = await User.findById(userId);
 
@@ -114,8 +148,20 @@ const updateUser = async (req, res) => {
       throw new Error("User does not exist");
     }
 
-    if (typeof biography == "string") {
+    if (typeof biography === "string") {
       user.biography = biography;
+    }
+    if (Array.isArray(skills)) {
+      user.skills = skills;
+    }
+    if (socialLinks && typeof socialLinks === "object") {
+      user.socialLinks = socialLinks;
+    }
+    if (year !== undefined) {
+      user.year = year;
+    }
+    if (Array.isArray(projects)) {
+      user.projects = projects;
     }
 
     await user.save();
@@ -131,7 +177,7 @@ const unfollow = async (req, res) => {
     const { userId } = req.body;
     const followingId = req.params.id;
 
-    const existingFollow = await Follow.find({ userId, followingId });
+    const existingFollow = await Follow.findOne({ userId, followingId });
 
     if (!existingFollow) {
       throw new Error("Not already following user");
@@ -172,6 +218,7 @@ const getFollowing = async (req, res) => {
 const getUser = async (req, res) => {
   try {
     const username = req.params.username;
+    const { userId: requesterId } = req.body;
 
     const user = await User.findOne({ username }).select("-password");
 
@@ -184,10 +231,21 @@ const getUser = async (req, res) => {
       .sort("-createdAt");
 
     let likeCount = 0;
-
     posts.forEach((post) => {
       likeCount += post.likeCount;
     });
+
+    const followerCount = await Follow.countDocuments({ followingId: user._id });
+    const followingCount = await Follow.countDocuments({ userId: user._id });
+
+    let isFollowing = false;
+    if (requesterId) {
+      const existingFollow = await Follow.findOne({
+        userId: requesterId,
+        followingId: user._id,
+      });
+      isFollowing = !!existingFollow;
+    }
 
     const data = {
       user,
@@ -196,6 +254,9 @@ const getUser = async (req, res) => {
         likeCount,
         data: posts,
       },
+      followerCount,
+      followingCount,
+      isFollowing,
     };
 
     return res.status(200).json(data);
@@ -241,6 +302,22 @@ const getRandomIndices = (size, sourceSize) => {
   return randomIndices;
 };
 
+const getUsersByDepartment = async (req, res) => {
+  try {
+    const { department } = req.query;
+
+    let users = await User.find().select("-password");
+
+    if (department && department !== "All") {
+      users = users.filter((u) => u.department === department);
+    }
+
+    return res.status(200).json(users);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -250,5 +327,6 @@ module.exports = {
   getFollowing,
   getUser,
   getRandomUsers,
+  getUsersByDepartment,
   updateUser,
 };

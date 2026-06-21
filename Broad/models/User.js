@@ -37,6 +37,24 @@ const UserSchema = new mongoose.Schema(
     department:{
       type: String,
     },
+    college: {
+      type: String,
+      required: true,
+      default: "CBIT",
+    },
+    idProofUrl: {
+      type: String,
+      default: "",
+    },
+    collegeEmail: {
+      type: String,
+      default: "",
+    },
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
     biography: {
       type: String,
       default: "",
@@ -46,7 +64,23 @@ const UserSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-
+    year: {
+      type: String,
+      enum: ["", "1st", "2nd", "3rd", "4th"],
+      default: "",
+    },
+    skills: [{ type: String }],
+    socialLinks: {
+      linkedin: { type: String, default: "" },
+      github: { type: String, default: "" },
+    },
+    projects: [
+      {
+        name: { type: String },
+        description: { type: String },
+        link: { type: String },
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -36,7 +36,7 @@ const sendMessage = async (req, res) => {
 
     conversation.save();
 
-    return res.json({ success: true });
+    return res.json({ success: true, conversationId: conversation._id });
   } catch (err) {
     console.log(err);
     return res.status(400).json({ error: err.message });
@@ -46,11 +46,25 @@ const sendMessage = async (req, res) => {
 const getMessages = async (req, res) => {
   try {
     const conversationId = req.params.id;
+    const { userId } = req.body;
 
-    const conversation = await Conversation.findById(conversationId);
+    let conversation;
+    if (mongoose.Types.ObjectId.isValid(conversationId)) {
+      conversation = await Conversation.findById(conversationId);
+      
+      if (!conversation) {
+        // Fallback: check if conversationId is actually the recipient's user ID
+        conversation = await Conversation.findOne({
+          recipients: {
+            $all: [userId, conversationId],
+          },
+        });
+      }
+    }
 
     if (!conversation) {
-      throw new Error("Conversation not found");
+      // Return empty array for brand-new conversations
+      return res.json([]);
     }
 
     const messages = await Message.find({
@@ -59,6 +73,11 @@ const getMessages = async (req, res) => {
       .populate("sender", "-password")
       .sort("-createdAt")
       .limit(12);
+
+    await Message.updateMany(
+      { conversation: conversation._id, sender: { $ne: userId }, read: false },
+      { read: true }
+    );
 
     return res.json(messages);
   } catch (err) {
@@ -87,9 +106,31 @@ const getConversations = async (req, res) => {
           conversation.recipient = conversation.recipients[j];
         }
       }
+      conversation.unreadCount = await Message.countDocuments({
+        conversation: conversation._id,
+        sender: { $ne: userId },
+        read: false
+      });
     }
 
     return res.json(conversations);
+  } catch (err) {
+    console.log(err);
+    return res.status(400).json({ error: err.message });
+  }
+};
+
+const getUnreadCount = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const conversations = await Conversation.find({ recipients: { $in: [userId] } });
+    const conversationIds = conversations.map(c => c._id);
+    const count = await Message.countDocuments({
+      conversation: { $in: conversationIds },
+      sender: { $ne: userId },
+      read: false
+    });
+    return res.json({ count });
   } catch (err) {
     console.log(err);
     return res.status(400).json({ error: err.message });
@@ -100,4 +141,5 @@ module.exports = {
   sendMessage,
   getMessages,
   getConversations,
+  getUnreadCount,
 };

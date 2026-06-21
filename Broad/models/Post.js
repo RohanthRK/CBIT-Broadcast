@@ -27,9 +27,55 @@ const PostSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    category: {
+      type: String,
+      enum: [
+        "General",
+        "Academics",
+        "Events",
+        "Placements",
+        "Sports",
+        "Exam Cell",
+        "Clubs",
+      ],
+      default: "General",
+    },
     edited: {
       type: Boolean,
       default: false,
+    },
+    poll: {
+      question: { type: String },
+      options: [
+        { text: { type: String }, votes: { type: Number, default: 0 } }
+      ],
+      allowEditVote: { type: Boolean, default: false },
+      showPercentages: { type: String, enum: ["always", "voted", "never"], default: "voted" },
+      multipleChoice: { type: Boolean, default: false }
+    },
+    attachmentUrl: {
+      type: String,
+      default: "",
+    },
+    attachmentType: {
+      type: String,
+      enum: ["image", "document", "none"],
+      default: "none",
+    },
+    attachments: [
+      {
+        url: { type: String },
+        type: { type: String, enum: ["image", "document"] }
+      }
+    ],
+    attachmentLayout: {
+      type: String,
+      enum: ["grid", "carousel"],
+      default: "grid",
+    },
+    targetDepartment: {
+      type: String,
+      default: "All",
     },
   },
   { timestamps: true }
